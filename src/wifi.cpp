@@ -30,8 +30,9 @@
 #include <WiFiManager.h>
 #include "weatherbase.h"
 #include "wifiwithmqtt.h"
+#include "display.h"
 
-const char *hostname = "weathertest";
+const char *hostname = "weatherbase";
 char mqttServer[MQTT_SERVER_LENGTH];
 char mqttTopic[MQTT_TOPIC_LENGTH];
 uint16_t mqttPort;
@@ -58,14 +59,25 @@ void printMQTT() {
   Serial.println(mqttTopic);
 }
 
+// Get rid of trailing spaces that sometime appear, probably from autocomplete on the browser
+static char *rtrim(char *str) {
+  char *end = str + strlen(str) -1;
+  while(end > str && isspace(*end))
+    end--;
+
+  end[1]='\0';
+
+  return str;
+}
+
 void readEEPROM() {
   EEPROM.begin(128);
   mqttConfig conf;
   EEPROM.get(0,conf);
   
   if (conf.valid ==0xDEADBEEF) {
-    strncpy(mqttServer, conf.server, MQTT_SERVER_LENGTH);
-    strncpy(mqttTopic, conf.topic, MQTT_TOPIC_LENGTH);
+    strncpy(mqttServer, rtrim(conf.server), MQTT_SERVER_LENGTH);
+    strncpy(mqttTopic, rtrim(conf.topic), MQTT_TOPIC_LENGTH);
     mqttPort=conf.port;
   }
   else {
@@ -87,8 +99,8 @@ void writeEEPROM() {
   mqttConfig conf;
 
   conf.valid = 0xDEADBEEF;
-  strncpy(conf.server, mqttServer, MQTT_SERVER_LENGTH);
-  strncpy(conf.topic, mqttTopic, MQTT_TOPIC_LENGTH);
+  strncpy(conf.server, rtrim(mqttServer), MQTT_SERVER_LENGTH);
+  strncpy(conf.topic, rtrim(mqttTopic), MQTT_TOPIC_LENGTH);
   conf.port = mqttPort;
 
   EEPROM.put(0,conf);
@@ -99,6 +111,7 @@ void callWFM(bool connect) {
   WiFiManager wfm;
 
   wfm.setAPCallback(configModeCallback);
+  wfm.setShowPassword(true);
 
   WiFiManagerParameter mqtt_server("server", "MQTT Server", mqttServer, MQTT_SERVER_LENGTH);
   char port_string[6];
@@ -139,8 +152,11 @@ void callWFM(bool connect) {
 
 void otaSetup() {
 
-  ArduinoOTA.setHostname(hostname);
+  Serial.println("OTA Setup");
+  //ArduinoOTA.setHostname(hostname);
+  ArduinoOTA.setPort(3232);
   ArduinoOTA.onStart([]() {
+    setError("Uploading Firmware...");
     String type;
     if (ArduinoOTA.getCommand() == U_FLASH)
       type = "sketch";
@@ -174,7 +190,6 @@ void otaSetup() {
 }
 
 void initializeWifiWithMQTT() {
-
   readEEPROM();
 
   printMQTT();
@@ -192,10 +207,8 @@ ICACHE_RAM_ATTR void longPress() {
   
   if (curState) {
   // Button Released
-    
     if((millis() - lastPressTime) > 1000)
     {
-      Serial.print('.');
       buttonLongPress = true;
     }
 

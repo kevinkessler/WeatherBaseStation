@@ -30,6 +30,8 @@
 #include "weatherbase.h"
 #include "wifiwithmqtt.h"
 #include "espnow.h"
+#include "display.h"
+#include "HTU21D.h"
 
 extern bool buttonLongPress;
 uint16_t count=0;
@@ -37,6 +39,10 @@ bool dataValid=false;
 sensor_data_t sensorData;
 float currentSecs;
 float prevSecs=0;
+long last_reconnect=30000;
+bool htd21Init = false;
+
+HTU21D            myHTU21D(HTU21D_RES_RH12_TEMP14);
 
 void connectEspNow(void);
 void connectWiFi(void);
@@ -50,6 +56,12 @@ static void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len
 
   Serial.printf("Current Time %f\n", currentSecs);
 
+  for(int i=0;i<6;i++) {
+    Serial.printf("%x:",mac_addr[i]);
+
+  }
+  Serial.println();
+
   if (len == sizeof(sensor_data_t))
   {
     memcpy(&sensorData, data, len);
@@ -60,8 +72,8 @@ static void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len
     Serial.printf("Humidity=%f\n",sensorData.humidity);
     Serial.printf("Battery Volts=%f mV\n",sensorData.battery_millivolts);
     Serial.printf("Direction=%d\n",sensorData.direction);
-    Serial.printf("Rain Count=%d\n", sensorData.rain_count);
-    Serial.printf("Anenomoeter Count=%d\n", sensorData.anemometer_count);
+    Serial.printf("Rain Count=%f\n", sensorData.rain);
+    Serial.printf("Anenomoeter Count=%f\n", sensorData.wind_speed);
     Serial.printf("Count=%d\n",count++);
 
     dataValid=true;
@@ -73,19 +85,44 @@ static void espnow_recv_cb(const uint8_t *mac_addr, const uint8_t *data, int len
 }
 
 void sendMQTTData() {
-    float messageInterval;
-    if(prevSecs==0) {
-      messageInterval = currentSecs;
+  float messageInterval;
+  if(prevSecs==0) {
+    messageInterval = currentSecs;
+  } else {
+    messageInterval = currentSecs - prevSecs;
+  }
+
+  Serial.printf("Message Interval %f\n",messageInterval);
+
+  publishData(sensorData.wakeup_reason, sensorData.temperature, sensorData.pressure, sensorData.humidity, sensorData.battery_millivolts, sensorData.direction, sensorData.wind_speed, sensorData.rain);
+  prevSecs = currentSecs;
+
+  if(!htd21Init){
+    Wire.begin();
+    Wire.setClock(100000);
+    if(myHTU21D.begin() !=true) {
+      Serial.println("HTU21 Failed");
+      log("htd21","HTD21D Failed to Initialize");
+      setError("HTD21D Initialization Failure");
     } else {
-      messageInterval = currentSecs - prevSecs;
+      htd21Init = true;
     }
+  }
 
-    Serial.printf("Message Interval %f\n",messageInterval);
-    float rainAccum = sensorData.rain_count * 0.011;
-    float windSpeed = 1.492 * (sensorData.anemometer_count / messageInterval);
+  float roomC = 0.0;
+  float roomHum = 0.0;
+  if(htd21Init) {
+    roomC = myHTU21D.readTemperature();
+    roomHum = myHTU21D.readCompensatedHumidity();
+    if(roomC > 65.0) {
+      log("htd21d","HTD21D Failure");
+      htd21Init = false;
+      setError("Temperature Sensor Failure");
+    }
+    publishRoomStats(roomC,roomHum);
+  }
 
-    publishData(sensorData.wakeup_reason, sensorData.temperature, sensorData.pressure, sensorData.humidity, sensorData.battery_millivolts, sensorData.direction, windSpeed, rainAccum);
-    prevSecs = currentSecs;
+  displayData(sensorData.temperature, sensorData.pressure, sensorData.humidity, sensorData.battery_millivolts, sensorData.direction, sensorData.wind_speed, sensorData.rain, roomC, roomHum);
 
 }
 
@@ -110,11 +147,17 @@ void connectWiFi(){
     Serial.println("SoftAP Fail");
   }
 
-  while (WiFi.status() != WL_CONNECTED) {
+  uint8_t wifiConn=0;
+  while (WiFi.status() != WL_CONNECTED) { 
+    wifiConn++;
     delay(1000);
     Serial.println("Establishing connection to WiFi..");
+    Serial.println(WiFi.status());
+    if(wifiConn > 10)
+      ESP.restart();
   }
 
+  otaSetup();
   initMQTT();
 }
 
@@ -130,11 +173,23 @@ void setup() {
   Serial.println(WiFi.channel());
 
   pinMode(CONFIG_BUTTON,INPUT);
-  attachInterrupt(CONFIG_BUTTON, longPress, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(CONFIG_BUTTON), longPress, CHANGE);
 
+  log("main","Starting");
+  
+  initDisplay();
 }
 
 void loop() {
+
+  if((WiFi.status() != WL_CONNECTED) && (millis() > last_reconnect)) {
+    Serial.println("Wifi Reconnect");
+    WiFi.disconnect();
+    WiFi.begin();
+    last_reconnect = millis() + 30000;
+    Serial.printf("WiFi Status=%d\n", WiFi.status());
+  }
+
   if(buttonLongPress) {
     Serial.println("Config Button");
     callWFM(false);
@@ -144,8 +199,13 @@ void loop() {
   // Fails if I send data to MQTT in call back
   if(dataValid) {
     dataValid=false;
+    Serial.println("Sending Data");
     sendMQTTData();
+    Serial.printf("WifiStatus %d\n",WiFi.status());
   }
+
+  mqttLoop();
+  displayLoop();
 
   ArduinoOTA.handle();
 }

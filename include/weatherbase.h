@@ -24,7 +24,13 @@
 #ifndef INCLUDE_WEATHERBASE_H_
 #define INCLUDE_WEATHERBASE_H_
 
+//#define DEV_MODE true
 #define STATION_NAME "WeatherBase"
+
+#define GMT_OFFSET_SECS -18000
+#define DAYLIGHT_OFFSET_SECS 3600
+
+#define ARDUINOJSON_USE_DOUBLE 1
 
 typedef struct __attribute__((packed)) sensor_data_t {
     uint8_t wakeup_reason;
@@ -33,9 +39,9 @@ typedef struct __attribute__((packed)) sensor_data_t {
     float humidity;
     float battery_millivolts;
     uint16_t direction;
-    uint16_t anemometer_count;
-    uint16_t rain_count;
+    float wind_speed;
+    float rain;
 } sensor_data_t;
 
-
+void otaSetup(void);
 #endif /* INCLUDE_WEATHERBASE_H_ */

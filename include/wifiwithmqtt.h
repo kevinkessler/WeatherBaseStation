@@ -28,7 +28,8 @@
 #define MQTT_TOPIC_LENGTH 40
 
 
-#define CONFIG_BUTTON 25
+#define CONFIG_BUTTON GPIO_NUM_0
+#define LOG_TOPIC "log"
 
 struct mqttConfig {
   uint32_t valid;
@@ -44,4 +45,9 @@ void initializeWifiWithMQTT(void);
 boolean publishData(uint8_t reason, float temperature, int32_t pressure, float humidity, float battery_millivolts, uint16_t direction, float anemometer, float rain);
 void initMQTT();
 void disconnectMQTT();
+void publishRoomStats(float temp, float hum);
+void mqttLoop(void);
+void logMessage(const char *system, const char* message);
+
+
 #endif /* INCLUDE_WIFIWITHMQTT_H_ */
