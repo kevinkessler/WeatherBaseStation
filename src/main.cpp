@@ -114,12 +114,14 @@ void sendMQTTData() {
   if(htd21Init) {
     roomC = myHTU21D.readTemperature();
     roomHum = myHTU21D.readCompensatedHumidity();
-    if(roomC > 65.0) {
+    if((roomC > 65.0) || (roomHum > 100.0)) {
       log("htd21d","HTD21D Failure");
       htd21Init = false;
       setError("Temperature Sensor Failure");
+      roomHum=101.0;
+    } else {
+      publishRoomStats(roomC,roomHum);
     }
-    publishRoomStats(roomC,roomHum);
   }
 
   displayData(sensorData.temperature, sensorData.pressure, sensorData.humidity, sensorData.battery_millivolts, sensorData.direction, sensorData.wind_speed, sensorData.rain, roomC, roomHum);

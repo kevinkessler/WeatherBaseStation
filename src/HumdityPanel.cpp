@@ -166,6 +166,7 @@ bool HumidityPanel::isClicked(uint16_t x, uint16_t y) {
         break;
     }
 
+    refreshCount = 0;
     draw();
     return true;
   }

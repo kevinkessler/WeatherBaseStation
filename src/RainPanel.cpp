@@ -152,7 +152,8 @@ bool RainPanel::isClicked(uint16_t x, uint16_t y) {
   }
 
     rainDirty = true;
-
+    
+    refreshCount = 0;
     draw();
     return true;
   }

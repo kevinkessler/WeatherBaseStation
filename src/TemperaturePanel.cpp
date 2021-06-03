@@ -269,7 +269,8 @@ bool TemperaturePanel::isClicked(uint16_t x, uint16_t y) {
         highlow=DAILY;
         break;
     }
-
+    
+    refreshCount = 0;
     draw();
     return true;
   }

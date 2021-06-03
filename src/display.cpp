@@ -53,8 +53,9 @@ WindPanel *wp;
 
 void resetTickerCallback(void);
 void dataTickerCallback(void);
+
 Ticker dataTimer(dataTickerCallback,300000); // 5 minutes
-Ticker resetTimer(resetTickerCallback,300000);
+
 
 static void waitForSignal(){
   uint16_t count=0;
@@ -248,8 +249,6 @@ void background_panel() {
 }
 
 void tftCTPTouch(uint16_t x, uint16_t y) {
-  resetTimer.stop(); // reset timer that puts everything back to Daily extremes after 5 minutes
-  resetTimer.start();
 
   if (first==NULL)
     return;
@@ -272,10 +271,12 @@ void displayData(float temperature, int32_t pressure, float humidity, float batt
 
   
   tp1->setTemperature((int8_t)((9.0/5.0 * temperature) + 32.0 + 0.5));
-  tp2->setTemperature((int8_t)((9.0/5.0 * roomTemp) + 32.0 + 0.5));
-  
   hp1->setHumidity((uint8_t)(humidity+0.5));
-  hp2->setHumidity((uint8_t)(roomHum +0.5));
+
+  if(roomHum != 101.0) {
+    tp2->setTemperature((int8_t)((9.0/5.0 * roomTemp) + 32.0 + 0.5));
+    hp2->setHumidity((uint8_t)(roomHum +0.5));
+  }
 
   headp->setBatteryLevel(battery_millivolts/1000.0);
 
@@ -303,7 +304,6 @@ void displayLoop(void) {
   checkTouch();
 
   dataTimer.update();
-  resetTimer.update();
 }
 
 void resetTickerCallback() {
@@ -337,7 +337,6 @@ void initDisplay() {
   background_panel();
   display_panels();
   dataTimer.start();
-  resetTimer.start();
 }
 
 void log(const char *system, const char *message) {

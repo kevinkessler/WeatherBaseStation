@@ -209,7 +209,7 @@ bool BaroPanel::isClicked(uint16_t x, uint16_t y) {
     }
 
     extremeDirty = true;
-
+    averagePoll=0;
     draw();
     return true;
   }
